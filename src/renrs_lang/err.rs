@@ -11,8 +11,39 @@ pub enum CompilationErrKind {
      */
     InvalidNumber, // Number
 
+    /**
+     * This will probably be unreachable but it's good to have in case we will ever need it
+     */
+    InvalidString,
+
     /** Code should not be read */
     Unreachable,
+}
+
+impl CompilationErrKind {
+    /// Returns `true` if the compilation err kind is [`InvalidString`].
+    ///
+    /// [`InvalidString`]: CompilationErrKind::InvalidString
+    #[must_use]
+    pub fn is_invalid_string(&self) -> bool {
+        matches!(self, Self::InvalidString)
+    }
+
+    /// Returns `true` if the compilation err kind is [`InvalidNumber`].
+    ///
+    /// [`InvalidNumber`]: CompilationErrKind::InvalidNumber
+    #[must_use]
+    pub fn is_invalid_number(&self) -> bool {
+        matches!(self, Self::InvalidNumber)
+    }
+
+    /// Returns `true` if the compilation err kind is [`Unreachable`].
+    ///
+    /// [`Unreachable`]: CompilationErrKind::Unreachable
+    #[must_use]
+    pub fn is_unreachable(&self) -> bool {
+        matches!(self, Self::Unreachable)
+    }
 }
 
 /**

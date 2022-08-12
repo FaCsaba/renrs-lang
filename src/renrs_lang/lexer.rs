@@ -104,12 +104,13 @@ pub enum Token {
     Num(Vec<char>),
     Ident(Vec<char>),
 
+    String(Vec<char>),
+
     EndOfLine,
     Invalid(char),
 }
 
 impl Lexer {
-    
     pub fn new(input: &str) -> Self {
         Lexer {
             input: input.chars().collect::<Vec<char>>().into_iter().peekable(),
@@ -178,7 +179,7 @@ impl Lexer {
             return Err(CompilationErr {
                 kind: CompilationErrKind::InvalidNumber,
                 message: format!(
-                    "invalid number at: {}:{}:{}",
+                    "Invalid number at: {}:{}:{}",
                     self.position.file.as_ref().unwrap_or(&String::from("")),
                     self.position.line,
                     self.position.column
@@ -186,6 +187,24 @@ impl Lexer {
             });
         }
         Ok(num)
+    }
+
+    fn read_string(&mut self) -> Result<Vec<char>, CompilationErr> {
+        let mut string = vec![];
+        while self.input.peek() != None
+            && self.input.peek() != Some(&'"')
+            && self.input.peek() != Some(&'\'')
+            && self.input.peek() != Some(&'\n')
+            && self.input.peek() != Some(&';')
+        {
+            string.push(self.read_char().unwrap()) // Unreachable
+        }
+
+        if self.input.peek() == Some(&'"') {
+            self.read_char();
+        }
+
+        Ok(string)
     }
 
     fn take_whitespace(&mut self) {
@@ -212,6 +231,20 @@ impl Iterator for Lexer {
                 '}' => Some(Ok((Token::RCurly(ch), pos))),
                 '(' => Some(Ok((Token::LParen(ch), pos))),
                 ')' => Some(Ok((Token::RParen(ch), pos))),
+
+                '"' | '\'' | '`' => Some(if let Ok(string) = self.read_string() {
+                    Ok((Token::String(string), pos))
+                } else {
+                    Err(CompilationErr {
+                        kind: CompilationErrKind::InvalidString,
+                        message: format!(
+                            "Invalid String found at: {}:{},{}",
+                            self.position.file.as_ref().unwrap_or(&String::from("")),
+                            self.position.line,
+                            self.position.column
+                        ),
+                    })
+                }),
 
                 '\n' | ';' => Some(Ok((Token::EndOfLine, pos))),
                 o => {
@@ -329,8 +362,31 @@ mod test {
         assert_eq!(lex.next().unwrap().unwrap().0, Token::Dot);
     }
 
+    #[test]
+    fn reading_string() {
+        let mut lex = Lexer::new(r#""Hello, world!"#);
+        assert_eq!(
+            Token::String(vec![
+                'H', 'e', 'l', 'l', 'o', ',', ' ', 'w', 'o', 'r', 'l', 'd', '!'
+            ]),
+            lex.next().unwrap().unwrap().0
+        );
+    }
+
+    #[test]
+    fn read_till_new_line_or_another_quoteation_mark() {
+        let mut lex = Lexer::new("\"a\n\"b");
+        assert_eq!(Token::String(vec!['a']), lex.next().unwrap().unwrap().0);
+        assert_eq!(Token::EndOfLine, lex.next().unwrap().unwrap().0);
+        assert_eq!(Token::String(vec!['b']), lex.next().unwrap().unwrap().0);
+
+        let mut lex = Lexer::new("\"a\" b");
+        assert_eq!(Token::String(vec!['a']), lex.next().unwrap().unwrap().0);
+        assert_eq!(Token::Ident(vec!['b']), lex.next().unwrap().unwrap().0);
+    }
+
     //#[test]
-    fn complex() {
+    fn _complex() {
         let lex = Lexer::new(
             r#"c = Character "Crab", "./sprites/crab"
 c_idle = Animation {
