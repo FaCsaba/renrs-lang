@@ -3,7 +3,7 @@
 /**
  * Kinds of errors encoutered when compiling
  */
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CompilationErrKind {
     /**
      * Number Lexed isn't valid.
@@ -20,7 +20,7 @@ pub enum CompilationErrKind {
  *
  *
  */
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct CompilationErr {
     /** What kind of error gets thrown */
     pub kind: CompilationErrKind,
