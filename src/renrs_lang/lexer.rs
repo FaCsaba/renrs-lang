@@ -45,7 +45,8 @@ impl Default for Pos {
     }
 }
 
-const INTERNAL_ERR_MSG: &str = "Reached unreachable. This is an error within renrs-lang itself.\nReport this bug on Github: https://github.com/FaCsaba/renrs-lang/issues";
+const INTERNAL_ERR_MSG: &str = r#"Reached unreachable. This is an error within renrs-lang itself.
+Report this bug on Github: https://github.com/FaCsaba/renrs-lang/issues"#;
 
 impl Pos {
     pub fn advance(&mut self, new_line: bool) -> Result<&Self, CompilationErr> {
@@ -72,16 +73,6 @@ impl Pos {
             }
         }
         Ok(self)
-    }
-
-    pub fn get_ch_pos(&self) -> Result<usize, CompilationErr> {
-        self.raw.ok_or(CompilationErr {
-            kind: CompilationErrKind::Unreachable,
-            message: format!(
-                "When getting a position of character. This shoud not happen. {}",
-                INTERNAL_ERR_MSG
-            ),
-        })
     }
 }
 
@@ -118,7 +109,7 @@ pub enum Token {
 }
 
 impl Lexer {
-    #[warn(dead_code)]
+    
     pub fn new(input: &str) -> Self {
         Lexer {
             input: input.chars().collect::<Vec<char>>().into_iter().peekable(),
@@ -338,21 +329,21 @@ mod test {
         assert_eq!(lex.next().unwrap().unwrap().0, Token::Dot);
     }
 
-//    #[test]
-//     fn complex() {
-//         let lex = Lexer::new(
-// r#"c = Character "Crab", "./sprites/crab"
-// c_idle = Animation {
-//     c show left
-//     wait 1s
-//     c show right
-// }
-// c_idle run
-// c "What a fine day""#,
-//         );
-//         panic!(
-//             "{:?}",
-//             lex.collect::<Vec<Result<(Token, Pos), CompilationErr>>>()
-//         )
-//     }
+    //#[test]
+    fn complex() {
+        let lex = Lexer::new(
+            r#"c = Character "Crab", "./sprites/crab"
+c_idle = Animation {
+    c show left
+    wait 1s
+    c show right
+}
+c_idle run
+c "What a fine day""#,
+        );
+        panic!(
+            "{:?}",
+            lex.collect::<Vec<Result<(Token, Pos), CompilationErr>>>()
+        )
+    }
 }
