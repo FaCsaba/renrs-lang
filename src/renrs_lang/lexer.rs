@@ -21,30 +21,58 @@ use super::err::{CompilationErr, CompilationErrKind};
  */
 #[derive(Debug)]
 pub struct Lexer {
-    input: Vec<char>,
+    input: std::iter::Peekable<std::vec::IntoIter<char>>,
     position: Pos,
     ch: Option<char>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pos {
     file: Option<String>,
     line: usize,
     column: usize,
-    raw: usize,
+    raw: Option<usize>,
 }
 
-const INTERNAL_ERR_MSG: &str = "This is an error within renrs-lang itself.\nReport this bug on Github: https://github.com/FaCsaba/renrs-lang/issues";
+impl Default for Pos {
+    fn default() -> Self {
+        Pos {
+            file: None,
+            line: 1,
+            column: 0,
+            raw: None,
+        }
+    }
+}
+
+const INTERNAL_ERR_MSG: &str = r#"Reached unreachable. This is an error within renrs-lang itself.
+Report this bug on Github: https://github.com/FaCsaba/renrs-lang/issues"#;
 
 impl Pos {
-    pub fn advance(&mut self, new_line: bool) -> &Self {
+    pub fn advance(&mut self, new_line: bool) -> Result<&Self, CompilationErr> {
         if new_line {
-            self.column += 1;
-        } else {
             self.line += 1;
+        } else {
+            self.column += 1;
         }
-        self.raw += 1;
-        return self;
+        match self.raw {
+            None => self.raw = Some(0),
+            _ => {
+                self.raw = Some(
+                    self.raw.ok_or(CompilationErr {
+                        kind: CompilationErrKind::Unreachable,
+                        message: format!(
+                            "We expected a character at: {:?}:{}:{} \n{}",
+                            self.file.as_ref().or(Some(&String::from(""))),
+                            self.line,
+                            self.column,
+                            INTERNAL_ERR_MSG
+                        ),
+                    })? + 1,
+                )
+            }
+        }
+        Ok(self)
     }
 }
 
@@ -59,11 +87,11 @@ impl Pos {
  * let mut lex = Lexer::new("1 + 1");
  * ```
  */
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Token {
-    ASSIGN(char),
-    PLUS(char),
-    MINUS(char),
+    Assign(char),
+    Plus(char),
+    Minus(char),
 
     LCurly(char),
     RCurly(char),
@@ -71,100 +99,93 @@ pub enum Token {
     LParen(char),
     RParen(char),
 
+    Dot,
+
+    Num(Vec<char>),
+    Ident(Vec<char>),
+
     EndOfLine,
-
-    NUM(Vec<char>),
-    IDENT(Vec<char>),
-
-    INVALID(char),
+    Invalid(char),
 }
 
 impl Lexer {
-    #[warn(dead_code)]
+    
     pub fn new(input: &str) -> Self {
-        let a: Vec<char> = input.chars().collect();
-        return Lexer {
-            input: a,
-            position: Pos::default(),
+        Lexer {
+            input: input.chars().collect::<Vec<char>>().into_iter().peekable(),
+            position: Pos {
+                file: None,
+                line: 0,
+                column: 1,
+                raw: None,
+            },
             ch: None,
-        };
+        }
     }
 
     fn read_char(&mut self) -> Option<char> {
-        if (self.position.raw + 1) > self.input.len() {
-            self.ch = None;
-            return None;
-        }
-        self.ch = Some(self.input[self.position.raw]);
-
-        self.position.advance(self.ch == Some('\n'));
+        self.position.advance(self.ch == Some('\n')).unwrap();
+        self.ch = self.input.next();
         self.ch
-    }
-
-    fn peak_next_char(&self) -> Option<char> {
-        if (self.position.raw + 1) > self.input.len() {
-            return None
-        }
-        Some(self.input[self.position.raw])
     }
 
     fn is_whitespace(&self) -> bool {
         match self.ch {
-            Some(ch) => match ch {
-                ' ' | '\t' => return true,
-                _ => return false,
-            },
-            _ => return false,
+            Some(ch) => matches!(ch, ' ' | '\t'),
+            _ => false,
         }
     }
 
-    fn is_ident_char(&self) -> bool {
-        self.ch.is_some_and(|&ch| ch.is_alphabetic() || ch == '_')
+    fn is_alphabetic(ch: Option<&char>) -> bool {
+        ch.is_some_and(|&ch| ch.is_alphabetic() || ch == &'_')
     }
 
-    fn is_alphanumberic(&self) -> bool {
-        self.ch.is_some_and(|&ch| ch.is_alphanumeric())
+    fn is_alphanumeric(ch: Option<&char>) -> bool {
+        ch.is_some_and(|&ch| ch.is_alphanumeric() || ch == &'_')
     }
 
-    
     fn read_ident(&mut self) -> Result<Vec<char>, CompilationErr> {
-        let mut ident = vec![];
-        let mut can_be_num = false;
-        while self.is_ident_char() || (can_be_num && self.is_alphanumberic()) {
-            ident.push(self.ch.ok_or(CompilationErr {
-                kind: CompilationErrKind::Unreachable,
-                message: format!("Reached unreachable. {}", INTERNAL_ERR_MSG),
-            })?); // We know this can not panic
-            self.read_char();
-            can_be_num = true;
+        let mut ident = vec![self.ch.ok_or(CompilationErr {
+            kind: CompilationErrKind::Unreachable,
+            message: format!("{}", INTERNAL_ERR_MSG.to_string()),
+        })?];
+
+        while Self::is_alphanumeric(self.input.peek()) {
+            if let Some(c) = self.read_char() {
+                ident.push(c);
+            }
         }
         Ok(ident)
     }
 
-    fn is_num_char(&self) -> bool {
-        self.ch.is_some_and(|&ch| ch.is_numeric() || ch == '.')
+    fn is_num_char(ch: Option<&char>) -> bool {
+        ch.is_some_and(|&ch| ch.is_numeric() || ch == &'.')
     }
-    
+
     fn read_num(&mut self) -> Result<Vec<char>, CompilationErr> {
-        let mut num = vec![];
-        while self.is_num_char() {
-            num.push(self.ch.ok_or(CompilationErr {
-                kind: CompilationErrKind::Unreachable,
-                message: format!("Reached unreachable. {}", INTERNAL_ERR_MSG),
-            })?);
-            self.read_char();
+        let mut num = vec![self.ch.ok_or(CompilationErr {
+            kind: CompilationErrKind::Unreachable,
+            message: format!("{}", INTERNAL_ERR_MSG),
+        })?];
+
+        while Self::is_num_char(self.input.peek()) {
+            if let Some(c) = self.read_char() {
+                num.push(c);
+            }
         }
-        if num.iter().filter(|x| **x == '.').count() > 1 || (num.len() == 1 && num[0] == '.') {
-            Err(CompilationErr {
+
+        if num.iter().filter(|&ch| ch == &'.').count() > 1 {
+            return Err(CompilationErr {
                 kind: CompilationErrKind::InvalidNumber,
                 message: format!(
-                    "{} isn't a valid number",
-                    num.iter().cloned().collect::<String>()
+                    "invalid number at: {}:{}:{}",
+                    self.position.file.as_ref().unwrap_or(&String::from("")),
+                    self.position.line,
+                    self.position.column
                 ),
-            })
-        } else {
-            Ok(num)
+            });
         }
+        Ok(num)
     }
 
     fn take_whitespace(&mut self) {
@@ -183,27 +204,32 @@ impl Iterator for Lexer {
         let pos = self.position.clone();
         match self.ch {
             Some(ch) => match ch {
-                '=' => return Some(Ok((Token::ASSIGN(ch), pos))),
-                '+' => return Some(Ok((Token::PLUS(ch), pos))),
-                '-' => return Some(Ok((Token::MINUS(ch), pos))),
+                '=' => Some(Ok((Token::Assign(ch), pos))),
+                '+' => Some(Ok((Token::Plus(ch), pos))),
+                '-' => Some(Ok((Token::Minus(ch), pos))),
 
-                '{' => return Some(Ok((Token::LCurly(ch), pos))),
-                '}' => return Some(Ok((Token::RCurly(ch), pos))),
-                '(' => return Some(Ok((Token::LParen(ch), pos))),
-                ')' => return Some(Ok((Token::RParen(ch), pos))),
+                '{' => Some(Ok((Token::LCurly(ch), pos))),
+                '}' => Some(Ok((Token::RCurly(ch), pos))),
+                '(' => Some(Ok((Token::LParen(ch), pos))),
+                ')' => Some(Ok((Token::RParen(ch), pos))),
 
-                '\n' | ';' => return Some(Ok((Token::EndOfLine, pos))),
-                _ => {
-                    if self.is_ident_char() {
-                        return Some(Ok((Token::IDENT(self.read_ident().ok()?), pos)));
+                '\n' | ';' => Some(Ok((Token::EndOfLine, pos))),
+                o => {
+                    if Self::is_alphabetic(Some(&o)) {
+                        return Some(Ok((Token::Ident(self.read_ident().ok()?), pos)));
                     }
-                    if self.is_num_char() {
-                        return Some(Ok((Token::NUM(self.read_num().ok()?), pos)));
+
+                    if o == '.' && Self::is_alphabetic(self.input.peek()) {
+                        return Some(Ok((Token::Dot, pos)));
                     }
-                    return Some(Ok((Token::INVALID(ch), pos)));
+
+                    if Self::is_num_char(Some(&o)) {
+                        return Some(Ok((Token::Num(self.read_num().ok()?), pos)));
+                    }
+                    Some(Ok((Token::Invalid(ch), pos)))
                 }
             },
-            None => return None,
+            None => None,
         }
     }
 }
@@ -211,18 +237,20 @@ impl Iterator for Lexer {
 #[cfg(test)]
 mod test {
     use super::*;
+
     #[test]
     fn end_of_file() {
         let mut a = Lexer::new("");
         assert_eq!(a.next(), None);
     }
+
     #[test]
     fn all_single_tokens() -> Result<(), CompilationErr> {
         let src = vec!["=", "+", "-", "{", "}", "(", ")"];
         let toks = vec![
-            Token::ASSIGN('='),
-            Token::PLUS('+'),
-            Token::MINUS('-'),
+            Token::Assign('='),
+            Token::Plus('+'),
+            Token::Minus('-'),
             Token::LCurly('{'),
             Token::RCurly('}'),
             Token::LParen('('),
@@ -235,56 +263,55 @@ mod test {
         }
         Ok(())
     }
+
     #[test]
     fn ident() -> Result<(), CompilationErr> {
         let mut lex = Lexer::new("_ident");
         assert_eq!(
             lex.next().unwrap()?.0,
-            Token::IDENT(vec!['_', 'i', 'd', 'e', 'n', 't'])
+            Token::Ident(vec!['_', 'i', 'd', 'e', 'n', 't'])
         );
         let mut lex = Lexer::new("hello");
         assert_eq!(
             lex.next().unwrap()?.0,
-            Token::IDENT(vec!['h', 'e', 'l', 'l', 'o'])
+            Token::Ident(vec!['h', 'e', 'l', 'l', 'o'])
         );
         let mut lex = Lexer::new("   \nhello");
         lex.next();
         assert_eq!(
             lex.next().unwrap()?.0,
-            Token::IDENT(vec!['h', 'e', 'l', 'l', 'o'])
+            Token::Ident(vec!['h', 'e', 'l', 'l', 'o'])
         );
         let mut lex = Lexer::new("     h1");
-        assert_eq!(lex.next().unwrap()?.0, Token::IDENT(vec!['h', '1']));
+        assert_eq!(lex.next().unwrap()?.0, Token::Ident(vec!['h', '1']));
         Ok(())
     }
+
     #[test]
     fn num() -> Result<(), CompilationErr> {
         let mut lex = Lexer::new("1");
-        assert_eq!(lex.next().unwrap()?.0, Token::NUM(vec!['1']));
+        assert_eq!(lex.next().unwrap()?.0, Token::Num(vec!['1']));
         let mut lex = Lexer::new(".1");
-        assert_eq!(lex.next().unwrap()?.0, Token::NUM(vec!['.', '1']));
+        assert_eq!(lex.next().unwrap()?.0, Token::Num(vec!['.', '1']));
         let mut lex = Lexer::new("1.1");
-        assert_eq!(lex.next().unwrap()?.0, Token::NUM(vec!['1', '.', '1']));
+        assert_eq!(lex.next().unwrap()?.0, Token::Num(vec!['1', '.', '1']));
         Ok(())
     }
+
     #[test]
     #[should_panic]
     fn incorrect_num_dots() {
         let mut lex = Lexer::new("..");
         _ = lex.next().unwrap();
     }
-    #[test]
-    #[should_panic]
-    fn incorrect_single_dot() {
-        let mut lex = Lexer::new(".");
-        let _ = lex.next().unwrap();
-    }
+
     #[test]
     #[should_panic]
     fn incorrect_num() {
         let mut lex = Lexer::new("0000.10.0");
         let _ = lex.next().unwrap();
     }
+
     #[test]
     fn token_chain() {
         let mut lex = Lexer::new("a b c d");
@@ -294,10 +321,29 @@ mod test {
         lex.next();
         assert_eq!(lex.next(), None);
     }
-    
+
     #[test]
     fn dot_for_access() {
-        let mut lex = Lexer::new("asdf.sdf");
+        let mut lex = Lexer::new("a.z");
         lex.next();
+        assert_eq!(lex.next().unwrap().unwrap().0, Token::Dot);
+    }
+
+    //#[test]
+    fn complex() {
+        let lex = Lexer::new(
+            r#"c = Character "Crab", "./sprites/crab"
+c_idle = Animation {
+    c show left
+    wait 1s
+    c show right
+}
+c_idle run
+c "What a fine day""#,
+        );
+        panic!(
+            "{:?}",
+            lex.collect::<Vec<Result<(Token, Pos), CompilationErr>>>()
+        )
     }
 }
