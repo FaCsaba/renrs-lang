@@ -90,8 +90,11 @@ impl Pos {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
     Assign(char),
+
     Plus(char),
     Minus(char),
+    Multiply(char),
+    Divide(char),
 
     LCurly(char),
     RCurly(char),
@@ -224,27 +227,18 @@ impl Iterator for Lexer {
         match self.ch {
             Some(ch) => match ch {
                 '=' => Some(Ok((Token::Assign(ch), pos))),
+
                 '+' => Some(Ok((Token::Plus(ch), pos))),
                 '-' => Some(Ok((Token::Minus(ch), pos))),
+                '*' => Some(Ok((Token::Multiply(ch), pos))),
+                '/' => Some(Ok((Token::Divide(ch), pos))),
 
                 '{' => Some(Ok((Token::LCurly(ch), pos))),
                 '}' => Some(Ok((Token::RCurly(ch), pos))),
                 '(' => Some(Ok((Token::LParen(ch), pos))),
                 ')' => Some(Ok((Token::RParen(ch), pos))),
 
-                '"' | '\'' | '`' => Some(if let Ok(string) = self.read_string() {
-                    Ok((Token::String(string), pos))
-                } else {
-                    Err(CompilationErr {
-                        kind: CompilationErrKind::InvalidString,
-                        message: format!(
-                            "Invalid String found at: {}:{},{}",
-                            self.position.file.as_ref().unwrap_or(&String::from("")),
-                            self.position.line,
-                            self.position.column
-                        ),
-                    })
-                }),
+                '"' | '\'' | '`' => Some(Ok((Token::String(self.read_string().unwrap()), pos))),
 
                 '\n' | ';' => Some(Ok((Token::EndOfLine, pos))),
                 o => {
