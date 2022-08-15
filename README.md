@@ -1,5 +1,5 @@
 # Renrs lang
-This crate implements the renrs language, used in the game engine Renrs which is also in developemnt
+This crate implements the renrs language, used in the game engine Renrs which is also in development
 
 ## Example
 ```

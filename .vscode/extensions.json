@@ -1,0 +1,7 @@
+{
+    "recommendations": [
+        "matklad.rust-analyzer",
+        "peterj.proto",
+        "tamasfe.even-better-toml"
+    ]
+}
