@@ -1,9 +1,23 @@
 [package]
-name = "renrs-lang"
+name = "Renrs"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
+[[bin]]
+name = "compiler"
+path = "src/compiler/lib.rs"
+test = true
 
+[[bin]]
+name = "runtime"
+path = "src/runtime/lib.rs"
+test = true
+
+[[bin]]
+name = "renrs"
+path = "src/front/lib.rs"
+test = true
+
+[dependencies]

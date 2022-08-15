@@ -1,0 +1,30 @@
+syntax="proto3";
+package runtime;
+
+service Input {
+    rpc keystroke (Keystroke) return (Response)
+    rpc key_down (Keystroke) return (Response)
+    rpc key_up (Keystroke) return (Response)
+    rpc mouse_mv (MouseMv) return (Response)
+}
+
+message Response {
+    bool success = 1;
+    string reason_for_fail = 2;
+}
+
+message MouseMv {
+    uint32 x_pos = 1;
+    uint32 y_pos = 2;
+}
+
+message Keystroke {
+    string key = 1;
+    bool is_ctrl = 2;
+    bool is_shift = 3;
+    bool is_alt = 4;
+}
+
+service Test {
+    rpc test ()
+}
